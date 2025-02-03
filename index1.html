@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excel Sheets to HTML Table</title>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: 'Roboto', Arial, sans-serif;
+            padding: 40px;
+            background-color: #f9f9f9;
+        }
+
+        .container {
+            max-width: 100%;
+            margin: auto;
+            background-color: rgba(250, 250, 250, 0.71);
+        }
+
+        h1 {
+            text-align: left;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .heading {
+            text-align: left;
+            font-size: 25px;
+            margin-bottom: 5px;
+        }
+        .heading input {
+            width: 50%;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        table {
+            width: 100%;
+            border-spacing: 20px;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 5px;
+            text-align: center;
+            border: 1px solid #000000;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+<h1>Excel File Viewer</h1>
+<div class="heading">
+    <input type="file" id="file-input">
+    <button id="save-as-button">Save As</button>
+</div>
+<table id="excel-table"></table>
+
+<script>
+    let fileInput = document.getElementById("file-input");
+    let table = document.getElementById("excel-table");
+    let saveAsButton = document.getElementById("save-as-button");
+    let currentData = [];
+
+    fileInput.addEventListener("change", () => {
+        const file = fileInput.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+
+        reader.onload = (event) => {
+            table.innerHTML = ""; // Clear any existing table content
+            const data = new Uint8Array(event.target.result);
+            const workbook = XLSX.read(data, { type: "array", cellStyles: true });
+
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+
+            // Extract cell styles and data
+            const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
+            currentData = rows; // Store the current data
+            const maxCols = Math.max(...rows.map(row => row.length));
+
+            // Iterate through rows and columns to build the table
+            rows.forEach((row, rowIndex) => {
+                const tr = document.createElement("tr");
+                row.forEach((cellValue, colIndex) => {
+                    const td = document.createElement(rowIndex === 0 ? "th" : "td");
+                    td.contentEditable = rowIndex !== 0; // Make cells editable except for the header
+                    td.textContent = cellValue;
+                    td.addEventListener("input", () => {
+                        currentData[rowIndex][colIndex] = td.textContent; // Update currentData on cell edit
+                    });
+                    tr.appendChild(td);
+                });
+                table.appendChild(tr);
+            });
+
+            // Send the JSON object to the backend server
+            fetch('http://localhost:3001/save-excel', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(rows)
+            }).then(response => response.json())
+              .then(data => console.log(data))
+              .catch(error => console.error('Error:', error));
+        };
+
+        reader.readAsArrayBuffer(file);
+    });
+
+    saveAsButton.addEventListener("click", () => {
+        // Send the updated data to the backend server
+        fetch('http://localhost:3001/save-excel', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(currentData)
+        }).then(response => response.json())
+          .then(data => alert(data.message))
+          .catch(error => console.error('Error:', error));
+    });
+</script>
+</body>
+</html>
